@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Чат</title>
+    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+    <link rel="stylesheet" href="./style.css">
+</head>
+
+<body>
+    <div id="app">
+        <ul id="messages"></ul>
+        <div class="controls">
+            <input type="text" id="username" placeholder="Your name">
+            <input type="text" id="msgInput" placeholder="Inpurt message...">
+            <button onclick="sendMessage()">Send</button>
+            <button onclick="clearChat()" class="clear-btn">Clear</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io('http://localhost:3000');
+        const messagesList = document.getElementById('messages');
+
+
+        socket.on('new-message', (data) => addMessageToList(data));
+
+        socket.on('message-history', (history) => {
+            messagesList.innerHTML = '';
+            history.forEach(msg => addMessageToList(msg));
+        });
+
+        socket.on('message-deleted', (messageId) => {
+            const el = document.querySelector(`[data-id='${messageId}']`);
+            if (el) el.remove();
+        });
+
+        socket.on('message-updated', (updatedMessage) => {
+            const el = document.querySelector(`[data-id='${updatedMessage.id}']`);
+            if (el) {
+                el.querySelector('.msg-text').textContent = updatedMessage.message;
+                el.querySelector('.msg-time').textContent = updatedMessage.time;
+            }
+        });
+
+        socket.on('chat-cleared', () => {
+            messagesList.innerHTML = '';
+        });
+
+
+        function sendMessage() {
+            const usernameInput = document.getElementById('username');
+            const messageInput = document.getElementById('msgInput');
+
+            const username = usernameInput.value || 'ANonim';
+            const message = messageInput.value;
+
+            if (!message.trim()) return;
+
+            socket.emit('send-message', { username, message });
+            messageInput.value = '';
+            messageInput.focus();
+        }
+
+        function deleteMessage(id) {
+            socket.emit('delete-message', id);
+        }
+
+        function editMessage(id) {
+            const el = document.querySelector(`[data-id='${id}']`);
+            const currentText = el.querySelector('.msg-text').textContent;
+            const newText = prompt("Input new text", currentText);
+
+            if (newText && newText.trim() !== "") {
+                socket.emit('update-message', { id, message: newText });
+            }
+        }
+
+        function clearChat() {
+            if (confirm("Do you want clear ALL chat history?")) {
+                socket.emit('clear-chat');
+            }
+        }
+
+        function addMessageToList(data) {
+            const li = document.createElement('li');
+            li.dataset.id = data.id;
+
+            li.innerHTML = `
+                <b>${data.username}</b>
+                <span class="msg-text">${data.message}</span>
+                <div class="msg-meta">
+                    <span class="msg-time">${data.time}</span>
+                    <span class="msg-actions">
+                        <button onclick="editMessage('${data.id}')">Edit</button>
+                        <button class="delete" onclick="deleteMessage('${data.id}')">Clear</button>
+                    </span>
+                </div>
+            `;
+            messagesList.appendChild(li);
+            messagesList.scrollTop = messagesList.scrollHeight;
+        }
+
+        document.getElementById('msgInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+
+</html>
